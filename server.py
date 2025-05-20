@@ -4,6 +4,7 @@ from typing import Dict
 from fastapi.responses import HTMLResponse
 from pathlib import Path
 import re
+import requests
 
 app = FastAPI()
 scooter_locations: Dict[int, Dict] = {}
@@ -11,6 +12,20 @@ scooter_locations: Dict[int, Dict] = {}
 class ScooterData(BaseModel):
     data: str  # 예: "count: 1 / (ID: 0, lat: ..., lon: ...)"
 
+# ✅ 텔레그램 알림 함수
+def send_telegram_alert(scooter_id, lat, lon):
+    BOT_TOKEN = "7666971770:AAEcgpNd7NHLXrU4PKi3Z6qKA0aJhECDZE0"
+    CHAT_ID = "8002468150"
+    map_url = f"https://www.google.com/maps?q={lat},{lon}"
+    message = f"🛴 킥보드 탐지!\nID: {scooter_id}\n📍 지도 보기: {map_url}"
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": message})
+    except Exception as e:
+        print(f"[Telegram Error] {e}")
+
+# ✅ 좌표 수신 API
 @app.post("/api/scooters")
 def receive_data(payload: ScooterData):
     print("[SERVER] Received:", payload.data)
@@ -23,16 +38,23 @@ def receive_data(payload: ScooterData):
             "lon": float(lon),
             "map_url": f"https://www.google.com/maps?q={lat},{lon}"
         }
+
+        # ✅ 푸시 알림 전송
+        send_telegram_alert(id_int, lat, lon)
+
     return {"status": "ok"}
 
+# ✅ 지도용 JSON 반환
 @app.get("/api/scooters")
 def get_all_data():
     return {"scooters": list(scooter_locations.values())}
 
+# ✅ 루트 확인용
 @app.get("/")
 def root():
     return {"message": "Server is running"}
 
+# ✅ 지도 페이지 반환
 @app.get("/map", response_class=HTMLResponse)
 def get_map():
     html_path = Path(__file__).parent / "map.html"
