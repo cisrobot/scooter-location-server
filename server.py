@@ -1,21 +1,35 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import Dict
+import re
 
 app = FastAPI()
+scooter_locations: Dict[int, Dict] = {}
 
-# 루트 경로 확인용
+class ScooterData(BaseModel):
+    data: str  # 예: "count: 2 / (ID: 1, lat: 36.654321, lon: 128.654321)"
+
+@app.post("/api/scooters")
+def receive_data(payload: ScooterData):
+    print("[SERVER] Received:", payload.data)
+
+    # 정규표현식으로 여러 킥보드 ID, 위도, 경도 추출
+    matches = re.findall(r"ID: (\d+), lat: ([\d.]+), lon: ([\d.]+)", payload.data)
+    for id_str, lat, lon in matches:
+        id_int = int(id_str)
+        scooter_locations[id_int] = {
+            "id": id_int,
+            "lat": float(lat),
+            "lon": float(lon)
+        }
+
+    return {"status": "ok"}
+
+@app.get("/api/scooters")
+def get_all_data():
+    return {"scooters": list(scooter_locations.values())}
+
 @app.get("/")
 def root():
     return {"message": "Server is running"}
-
-# 데이터 형식을 정의 (ROS2에서 보내는 메시지 구조와 맞춰야 함)
-class ScooterData(BaseModel):
-    data: str  # 예: "count: 3 / (ID: 1, lat: ..., lon: ...), ..."
-
-# POST 요청 처리 경로
-@app.post("/api/scooters")
-async def receive_scooter_data(payload: ScooterData):
-    print("[SERVER] Received:", payload.data)
-    # 여기서 DB 저장, 로그 기록, 알림 전송 등 가능
-    return {"status": "received"}
 
